@@ -1,169 +1,166 @@
-# Kibo ✨
+# Kibo 🍊
 
-*A tiny desktop companion with expressive OLED eyes, capacitive touch interaction, and a persistent mood engine running entirely on an ESP32-C3.*
+**A tiny desk buddy with a big mood.** Kibo is an ESP32-C3 desktop companion with an animated OLED face, touch interaction, a clock, weather pages, and a tiny arcade.
 
----
+> **Build status:** The firmware and enclosure STL are in this repository. Case-to-component fit and battery power path are prototypes and still need physical validation.
 
-## Overview
+<!-- TODO: Add assembled concept / photo of printed unit -->
+<!-- ![Kibo assembled concept: orange 3D-printed body with OLED face](docs/images/kibo-concept.png) -->
+> _📷 Assembled photo / concept render coming soon._
 
-**Kibo** is an open-source, interactive desktop companion. Built around a compact 128×64 monochrome OLED display, a capacitive touch sensor, and an ESP32-C3 Super Mini microcontroller, Kibo blends expressive facial animations with practical desk companion utilities:
+## What Kibo does
 
-- **Expressive Eye Physics:** Spring-mass-damper physics engine simulating saccades, dynamic pupil dilation, blinking, breathing cycles, and emotion states.
-- **Dynamic Mood & Personality Engine:** Tracks energy, curiosity, contentment, and irritability. Remembers familiarity, total touches, and mood history across restarts using non-volatile storage (`Preferences`).
-- **Interactive Touch Gestures:** Single tap, multi-tap bursts, long presses, and continuous "petting" detection with squish reactions and floating particles.
-- **Carousel of Desk Utilities:**
-  - **Face Page:** Kibo's animated resting face with micro-gestures (yawns, winks, looks around, stretches).
-  - **Local Clock & World Clock:** NTP-synchronized digital or analog clock with support for configurable secondary timezones.
-  - **Live Weather & Multi-Day Forecast:** Real-time temperature, condition icons (sun, clouds, rain, snow, storm), humidity, and forecasts via OpenWeatherMap. Supports multiple saved cities.
-  - **Tiny Arcade:** Built-in mini-games played directly via the touch sensor — *Flappy Kibo* and *Blink Reflex*.
-- **Onboard Captive Portal & Web UI:** On first boot (or when Wi-Fi is unavailable), Kibo launches an Access Point (`Kibo-Setup`) and renders a QR code on the OLED. Connect via any phone or browser to configure Wi-Fi, timezones, weather cities, API keys, and birthdays.
-- **3D Printable Enclosure:** Includes a custom STL model ready for 3D printing.
+- Expressive eyes, blinking, glances, sleep and wake animations, and context-aware reactions.
+- Remembers mood-related values, familiarity, pet count, and touch history across restarts.
+- Uses a TTP223 capacitive touch sensor for taps, multi-taps, holds, petting, and game input.
+- Shows a local clock, optional world clock, weather, and forecast pages.
+- Includes two touch games: **Flappy Kibo** and **Blink Reflex**.
+- Hosts a phone-friendly setup page for Wi-Fi, timezone, weather cities, and other settings.
 
----
+Kibo runs on the ESP32-C3. It does not currently have a microphone, speaker, battery gauge, or charging-status input.
 
-## Hardware Architecture
+## The physical build
 
-### Bill of Materials
+### Current enclosure model
 
-| Component | Specification | Notes |
-| :--- | :--- | :--- |
-| **Microcontroller** | ESP32-C3 Super Mini (HW-466AB) | RISC-V core with 2.4 GHz Wi-Fi & BLE |
-| **Display** | 0.96" SSD1306 I²C OLED (128×64) | Monochrome blue or white, I²C address `0x3C` |
-| **Input Sensor** | TTP223 Capacitive Touch Switch | Set to active HIGH / momentary mode |
-| **Power** | 5V via USB-C | Powered directly through ESP32-C3 USB port |
-| **Case** | Custom 3D-printed enclosure | [Kibo.stl](file:///Users/sanketbharadwaj/Developer/Kibo/Kibo.stl) |
+<!-- TODO: Add enclosure render / photo -->
+<!-- ![Isometric render of the Kibo STL with its separate pieces shown apart](docs/images/kibo-case-render.png) -->
+> _📷 Enclosure render / photo placeholder — STL preview to be updated._
 
-### Wiring Diagram
+The mesh has two separated components. Its approximate overall bounds are **79.8 × 49.0 × 17.5 mm**, assuming the STL coordinate units are millimetres. Confirm the dimensions and part orientation in your slicer before printing.
 
-```text
-       ESP32-C3 Super Mini
-      ┌───────────────────┐
-      │                   │
-      │        3V3 ───────┼───────► VCC  (OLED & TTP223)
-      │        GND ───────┼───────► GND  (OLED & TTP223)
-      │                   │
-      │     GPIO 0 (SDA) ─┼───────► SDA  (SSD1306 OLED)
-      │     GPIO 1 (SCL) ─┼───────► SCL  (SSD1306 OLED)
-      │                   │
-      │     GPIO 4 ───────┼───────► I/O  (TTP223 Touch Out)
-      │                   │
-      └───────────────────┘
-```
+- Enclosure file: [Kibo.stl](Kibo.stl)
+- Renderer used for the preview: [tools/render_case.py](tools/render_case.py)
+- The repository currently has the STL, but not its editable CAD source.
+- The case has not yet been fit-tested with the OLED, ESP32 board, touch sensor, or battery. Treat the print as a prototype and check clearances before final assembly.
 
-> **Note:** The firmware also falls back to check alternate I²C pins (GPIO 8 as SDA, GPIO 9 as SCL) if your board variant differs. Always confirm the pin labeling on your specific ESP32-C3 breakout.
+### Parts list
 
----
+| Part | Current choice | Notes |
+| --- | --- | --- |
+| Microcontroller | ESP32-C3 Super Mini, HW-466AB | Firmware uses GPIO 0, 1, and 4 for display and touch. |
+| Display | SSD1306 I²C OLED, 128 × 64, usually 0.96 in | Firmware uses I²C address `0x3C`. Check your module’s labels. |
+| Touch input | TTP223 touch module | Firmware expects momentary, active-HIGH output. |
+| Enclosure | 3D-printed `Kibo.stl` | Two STL components; physical fit is not yet verified. |
+| Normal power | USB-C to the ESP32-C3 board | This is the power arrangement currently documented for Kibo. |
+| Battery parts on hand | Type-C TP4056 charger/protection module and 3.7 V 500 mAh 602030 LiPo | Battery operation is not yet integrated or validated; see the power note below. |
 
-## Touch Controls & Gestures
+### Firmware wiring
 
-| Gesture | Where | Action |
-| :--- | :--- | :--- |
-| **Single Tap** | Face Page | Cycles to the next page (Clock → Weather → Forecast → Arcade → Face) |
-| **Double Tap** | Face Page | Triggers an interactive reaction / emote |
-| **Triple Tap** | Face Page | Puts Kibo to sleep / wake up |
-| **Long Press / Hold (>600ms)** | Face Page | "Petting" mode — eyes squish happily, spawns heart particles |
-| **Rapid Tapping (Burst)** | Face Page | Overstimulates Kibo — triggers dizzy or annoyed state |
-| **Long Press (>800ms)** | Clock Page | Toggles between Local Clock and World Clock |
-| **Long Press (>800ms)** | Weather / Forecast | Cycles through configured multi-city weather list |
-| **Single Tap** | Arcade Menu | Starts selected mini-game / jumps or taps during gameplay |
-| **Double Tap** | Arcade Menu | Toggles between *Flappy Kibo* and *Blink Reflex* |
-| **Long Press (>1200ms)** | In-Game | Exits game back to Arcade menu with a reaction |
+![Kibo wiring diagram for the ESP32-C3, OLED, and TTP223](docs/images/wiring.svg)
 
----
+| ESP32-C3 | Connects to | Purpose |
+| --- | --- | --- |
+| `3V3` | OLED `VCC`; TTP223 `VCC` | Logic-module power |
+| `GND` | OLED `GND`; TTP223 `GND` | Shared ground |
+| `GPIO 0` | OLED `SDA` | I²C data |
+| `GPIO 1` | OLED `SCL` | I²C clock |
+| `GPIO 4` | TTP223 `OUT` / `I/O` | Touch signal |
+| USB-C | ESP32-C3 USB-C port | Normal board power and firmware upload |
 
-## Software & Firmware Setup
+The firmware first tries I²C on GPIO 0/1 and has a fallback to GPIO 8/9 if the display is not found. Use the pin labels and the board variant you actually have; don’t connect by wire colour alone.
 
-### Prerequisites
+### Battery and charging: read before wiring
 
-1. Install [Arduino IDE](https://www.arduino.cc/en/software) (2.x recommended) or [PlatformIO](https://platformio.org/).
-2. Add ESP32 board support in Arduino IDE:
-   - Navigate to **Preferences** → **Additional Boards Manager URLs**:
-     ```text
-     https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
-     ```
-   - Open **Boards Manager** and install **esp32** by Espressif Systems.
-3. Install required libraries via the Arduino Library Manager:
-   - `Adafruit GFX Library`
-   - `Adafruit SSD1306`
-   - `Arduino_JSON`
+The TP4056 module charges a single LiPo cell. Connect the battery to `B+`/`B−`; `OUT+`/`OUT−` are the protected load terminals. **Those outputs are battery voltage, roughly 3.0–4.2 V, not a regulated 5 V or 3.3 V supply. Do not connect them directly to the ESP32-C3 5V/VBUS or 3V3 pin.**
 
-### Flashing the Firmware
+A battery-powered Kibo needs a properly regulated supply and a power path designed for the ESP32 board. Charging while Kibo is running can also affect the TP4056’s charge-complete detection. The `5V 1A` product title alone does not confirm the safe charge current for this particular 500 mAh cell; check the battery manufacturer’s specification and the charger’s current-setting resistor. Until the power path is designed and tested, power Kibo from the ESP32 board’s USB-C port and treat the battery/charger as a separate subsystem. See the [TP4056 datasheet](https://www.toppwr.com/uploadfile/file/20230304/640301eae1260.pdf) for its charge-current setting and termination behavior.
 
-1. Clone or download this repository:
-   ```bash
-   git clone https://github.com/bharadwajsanket/KIBO.git
-   ```
-2. Ensure the following files remain in the same folder named `Kibo`:
-   - [Kibo.ino](file:///Users/sanketbharadwaj/Developer/Kibo/Kibo.ino)
-   - [qrcode.c](file:///Users/sanketbharadwaj/Developer/Kibo/qrcode.c)
-   - [qrcode.h](file:///Users/sanketbharadwaj/Developer/Kibo/qrcode.h)
-3. Open `Kibo.ino` in Arduino IDE.
-4. Select board: **ESP32C3 Dev Module** (or your specific ESP32-C3 Super Mini profile).
-5. Set flash settings (typical defaults):
-   - **Flash Mode**: DIO / QIO
-   - **Flash Size**: 4MB
-   - **USB CDC On Boot**: Enabled (if using hardware USB-CDC)
-6. Connect your ESP32-C3 via USB, select the correct COM/Serial port, and click **Upload**.
+![TP4056 and LiPo charging block diagram; regulated ESP32 power stage is still pending](docs/images/battery-power-path.svg)
 
----
+The diagram shows the charger and battery as a separate charging subsystem. It deliberately does not show an unverified wire from the battery output to the ESP32.
 
-## Initial Configuration & Web Portal
+## Touch controls
 
-1. On first power-on (or whenever configured Wi-Fi is unreachable), Kibo starts an access point:
-   - **SSID:** `Kibo-Setup`
-   - **Default Password:** `12345678`
-2. Kibo will display a scannable **QR code** on her OLED screen for quick phone connection.
-3. Once connected to `Kibo-Setup`, open your browser and navigate to:
-   ```text
-   http://192.168.4.1
-   ```
-4. Configure your preferences:
-   - **Wi-Fi Settings:** Network SSID and Password.
-   - **Timezone:** POSIX timezone string (e.g. `UTC0`, `EST5EDT`, `IST-5:30`) and optional World Clock offset.
-   - **Weather (Optional):** Enter your free [OpenWeatherMap](https://openweathermap.org/api) API key and city/country codes (format: `London|GB; Tokyo|JP; New York|US`).
-   - **Birthdays & Dates:** Store special dates for custom celebration animations.
-   - **Security:** Update the AP setup password.
-5. Save and restart Kibo. Kibo connects to your home network, syncs time via NTP, and pulls weather updates in the background.
+| Page | Gesture | Action |
+| --- | --- | --- |
+| Face | Single tap | Play reaction |
+| Face | Double tap | Open time page |
+| Face | Hold | Pet Kibo |
+| Face | Three rapid taps | Fed-up reaction; sleep follows if the burst ends there |
+| Face | Four or more rapid taps | Eye-roll/faint sequence, then doze and recover |
+| Time | Single tap | Toggle analog/digital clock |
+| Time | Double tap | Open weather |
+| Time | Hold | Open world clock (when time sync is ready) |
+| Weather | Single tap | Toggle °C/°F |
+| Weather | Double tap | Open forecast |
+| Weather / forecast | Hold | Switch to the next configured city |
+| Forecast | Double tap | Open arcade |
+| Arcade menu | Single tap | Start the selected game |
+| Arcade menu | Double tap | Switch between the games |
+| Arcade menu | Hold | Return to face |
+| In a game | Tap | Game input |
+| In a game | Hold | Exit to the arcade menu |
 
----
+The exact feel depends on the TTP223 module and the firmware constants. The controls above describe the current `Kibo.ino` gesture logic.
 
-## Repository Structure
+## Flash the firmware
+
+### Requirements
+
+- Arduino IDE 2.x.
+- Espressif’s `esp32` board package.
+- Libraries: `Adafruit GFX Library`, `Adafruit SSD1306`, and `Arduino_JSON`.
+- Keep `Kibo.ino`, `qrcode.c`, and `qrcode.h` together in the sketch folder.
+
+### Board settings
+
+Use **ESP32C3 Dev Module** for the HW-466AB Super Mini unless your exact board package provides a matching profile. Set flash size to **4 MB**. The code uses the ESP32 Arduino core’s Wi-Fi, web server, preferences, and HTTP libraries in addition to the libraries listed above.
+
+The current sketch is close to the default 1.2 MB application partition limit. If compilation reports `text section exceeds available space`, select a larger application partition in the board menu if your installed ESP32 core offers one. This firmware does not use SPIFFS. Keep **Erase All Flash Before Sketch Upload** disabled if you want to preserve settings stored in NVS.
+
+1. Open `Kibo.ino` in Arduino IDE.
+2. Select the ESP32-C3 board and the port for your device.
+3. Confirm the partition has enough room for the compiled sketch.
+4. Upload over USB-C.
+
+## First-time setup
+
+1. On first boot, Kibo starts the `Kibo-Setup` Wi-Fi access point if no saved Wi-Fi network is available.
+2. Connect your phone to that network. The firmware’s default setup password is `12345678`; change it in the setup page.
+3. Open `http://192.168.4.1` if the page does not open automatically.
+4. Add Wi-Fi credentials, timezone, and optional weather settings. Up to four weather cities are supported. OpenWeatherMap requires your own API key.
+5. Save and restart Kibo.
+
+Wi-Fi credentials and settings are stored in ESP32 non-volatile preferences. Don’t put personal credentials or weather API keys in source files or commit them to GitHub.
+
+## Printing and assembly notes
+
+- Print `Kibo.stl` at **100% scale** first; confirm the slicer’s units and bounding box.
+- Use PLA or PETG and a 0.16–0.20 mm layer height as a starting point. Choose orientation and supports from the slicer preview because the STL contains separate pieces.
+- Dry-fit the display and boards before closing or gluing the case. Leave room for wiring, USB-C access, and touch-sensor access.
+- Test the firmware and touch sensor outside the enclosure before final assembly.
+- Add photos of the actual printed parts and assembled Kibo here once the fit has been checked.
+
+### Next enclosure revision
+
+The current STL has no editable CAD source, and its internal clearances have not been checked against the actual modules. For a fit-tested revision with proper OLED supports, board mounts, USB access, and battery space, measure the OLED PCB and screen window, ESP32 board including its USB-C socket, TTP223 board, charger board, and battery. Clear top-and-bottom photos beside a ruler or caliper will also help capture connector and wire locations. The printed test fit can then be documented here.
+
+## Repository layout
 
 ```text
 Kibo/
-├── Kibo.ino          # Complete firmware: state machine, graphics engine, web portal
-├── qrcode.c          # Lightweight QR code generator engine
-├── qrcode.h          # Header definitions for QR code generation
-├── Kibo.stl          # 3D printable desktop enclosure
-├── README.md         # Documentation & setup guide
-└── LICENSE           # MIT License
+├── Kibo.ino
+├── qrcode.c
+├── qrcode.h
+├── Kibo.stl
+├── tools/
+│   └── render_case.py
+├── .gitignore
+├── docs/
+│   └── images/
+│       ├── kibo-concept.png
+│       ├── kibo-case-render.png
+│       ├── wiring.svg
+│       └── battery-power-path.svg
+├── LICENSE
+└── README.md
 ```
 
----
+## License
 
-## 3D Printing the Case
-
-- File: [Kibo.stl](file:///Users/sanketbharadwaj/Developer/Kibo/Kibo.stl)
-- Recommended print settings:
-  - **Material:** PLA or PETG
-  - **Layer Height:** 0.16mm – 0.20mm
-  - **Infill:** 15% – 20%
-  - **Supports:** As needed depending on print orientation
+Kibo is released under the [MIT License](LICENSE). The QR-code source includes its own MIT copyright notice in `qrcode.c` (Richard Moore, 2017; inspired by Nayuki’s QR Code Generator).
 
 ---
 
-## Contributing
-
-Contributions, bug reports, and ideas are welcome! Feel free to:
-1. Fork the repository.
-2. Create your feature branch (`git checkout -b feature/cool-animation`).
-3. Commit your changes (`git commit -m 'Add new micro-gesture'`).
-4. Push to the branch (`git push origin feature/cool-animation`).
-5. Open a Pull Request.
-
----
-
-## License & Credits
-
-- **Project:** Licensed under the [MIT License](file:///Users/sanketbharadwaj/Developer/Kibo/LICENSE) — Copyright (c) 2025 Sanket Bharadwaj.
-- **QR Code Engine:** `qrcode.c` / `qrcode.h` are copyright (c) Richard Moore and licensed under the MIT License (inspired by Nayuki's QR code generator).
+Built by Sanket, one tiny reaction at a time. 🧡

@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="940" viewBox="0 0 1440 940" role="img" aria-labelledby="title desc">
+  <title id="title">Kibo firmware wiring diagram</title>
+  <desc id="desc">Verified wiring for ESP32-C3 Super Mini, SSD1306 OLED, and TTP223 touch module. USB-C powers the development board. The separate TP4056 battery charger is not wired to the ESP power input in this diagram.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fffdf9"/><stop offset="1" stop-color="#f0ece5"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#4b3525" flood-opacity=".12"/></filter>
+  </defs>
+  <rect width="1440" height="940" rx="28" fill="url(#bg)"/>
+  <text x="64" y="78" font-family="Inter,Arial,sans-serif" font-size="34" font-weight="700" fill="#25211d">Kibo · verified firmware wiring</text>
+  <text x="64" y="116" font-family="Inter,Arial,sans-serif" font-size="19" fill="#766b60">ESP32-C3 Super Mini · 0.96″ SSD1306 OLED · TTP223 touch sensor</text>
+
+  <!-- Connection lines are routed behind the component cards. -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="5">
+    <path d="M515 340 H760 V340 H910" stroke="#286bd6"/>
+    <path d="M515 395 H790 V395 H910" stroke="#8553c7"/>
+    <path d="M515 450 H740 V450 H910" stroke="#d64b32"/>
+    <path d="M515 505 H820 V505 H910" stroke="#4b5058"/>
+    <path d="M515 610 H735 V670 H910" stroke="#e19125"/>
+    <path d="M850 450 V720 H910" stroke="#d64b32" stroke-dasharray="10 10" opacity=".75"/>
+    <path d="M840 505 V772 H910" stroke="#4b5058" stroke-dasharray="10 10" opacity=".75"/>
+  </g>
+
+  <!-- ESP board -->
+  <g filter="url(#shadow)">
+    <rect x="70" y="180" width="445" height="540" rx="24" fill="#184c3b"/>
+    <rect x="190" y="196" width="205" height="42" rx="11" fill="#123b30" stroke="#6d9882" stroke-width="2"/>
+    <text x="292" y="224" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="18" font-weight="700" fill="#f7f4ed">USB-C · 5 V power</text>
+    <text x="112" y="274" font-family="Inter,Arial,sans-serif" font-size="25" font-weight="700" fill="#fffaf1">ESP32-C3 Super Mini</text>
+    <text x="112" y="308" font-family="Inter,Arial,sans-serif" font-size="17" fill="#c5dbce">HW-466AB · firmware pin map</text>
+    <g font-family="Inter,Arial,sans-serif" font-size="18" font-weight="600" fill="#fffaf1">
+      <text x="112" y="340">GPIO 0 · SDA</text>
+      <text x="112" y="395">GPIO 1 · SCL</text>
+      <text x="112" y="450">3V3</text>
+      <text x="112" y="505">GND</text>
+      <text x="112" y="610">GPIO 4 · Touch input</text>
+    </g>
+    <g fill="#fffaf1">
+      <circle cx="515" cy="340" r="7"/><circle cx="515" cy="395" r="7"/><circle cx="515" cy="450" r="7"/><circle cx="515" cy="505" r="7"/><circle cx="515" cy="610" r="7"/>
+    </g>
+    <text x="112" y="650" font-family="Inter,Arial,sans-serif" font-size="15" fill="#c5dbce">Power Kibo through the board’s USB-C port.</text>
+  </g>
+
+  <!-- OLED -->
+  <g filter="url(#shadow)">
+    <rect x="910" y="180" width="455" height="340" rx="24" fill="#17191c"/>
+    <text x="950" y="225" font-family="Inter,Arial,sans-serif" font-size="24" font-weight="700" fill="#fffaf1">SSD1306 OLED · 128 × 64</text>
+    <text x="950" y="256" font-family="Inter,Arial,sans-serif" font-size="16" fill="#b8b8b5">I²C address 0x3C</text>
+    <g font-family="Inter,Arial,sans-serif" font-size="18" fill="#fffaf1">
+      <text x="950" y="340">SDA</text><text x="950" y="395">SCL</text><text x="950" y="450">VCC</text><text x="950" y="505">GND</text>
+    </g>
+    <g fill="#fffaf1"><circle cx="910" cy="340" r="7"/><circle cx="910" cy="395" r="7"/><circle cx="910" cy="450" r="7"/><circle cx="910" cy="505" r="7"/></g>
+    <rect x="1025" y="292" width="270" height="120" rx="12" fill="#08090b" stroke="#404348" stroke-width="3"/>
+    <rect x="1077" y="322" width="53" height="55" rx="18" fill="#f7f5f1"/>
+    <rect x="1188" y="322" width="53" height="55" rx="18" fill="#f7f5f1"/>
+  </g>
+
+  <!-- TTP223 -->
+  <g filter="url(#shadow)">
+    <rect x="910" y="570" width="455" height="220" rx="24" fill="#d7a84d"/>
+    <text x="950" y="610" font-family="Inter,Arial,sans-serif" font-size="24" font-weight="700" fill="#2b2418">TTP223 touch module</text>
+    <text x="950" y="638" font-family="Inter,Arial,sans-serif" font-size="16" fill="#594624">Momentary mode · active HIGH</text>
+    <g font-family="Inter,Arial,sans-serif" font-size="18" fill="#2b2418">
+      <text x="950" y="670">OUT / I/O</text>
+      <text x="950" y="720">VCC</text>
+      <text x="950" y="772">GND</text>
+    </g>
+    <g fill="#2b2418"><circle cx="910" cy="670" r="7"/><circle cx="910" cy="720" r="7"/><circle cx="910" cy="772" r="7"/></g>
+    <circle cx="1260" cy="702" r="52" fill="#c28f37" stroke="#9e7128" stroke-width="3"/>
+    <text x="1260" y="708" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="15" font-weight="700" fill="#fff7e7">TOUCH</text>
+  </g>
+
+  <circle cx="850" cy="450" r="7" fill="#fffaf1"/><circle cx="840" cy="505" r="7" fill="#fffaf1"/>
+  <!-- Legend -->
+  <g font-family="Inter,Arial,sans-serif" font-size="16" fill="#4e463d">
+    <circle cx="90" cy="824" r="6" fill="#286bd6"/><text x="108" y="830">SDA</text>
+    <circle cx="190" cy="824" r="6" fill="#8553c7"/><text x="208" y="830">SCL</text>
+    <circle cx="290" cy="824" r="6" fill="#d64b32"/><text x="308" y="830">3V3 rail</text>
+    <circle cx="430" cy="824" r="6" fill="#4b5058"/><text x="448" y="830">GND rail</text>
+    <circle cx="580" cy="824" r="6" fill="#e19125"/><text x="598" y="830">Touch signal</text>
+  </g>
+  <rect x="70" y="858" width="1295" height="52" rx="13" fill="#fff0cf" stroke="#e2c27e"/>
+  <text x="92" y="890" font-family="Inter,Arial,sans-serif" font-size="16" fill="#5c451b">Battery note: TP4056 B+/B− and OUT+/OUT− are not connected to the ESP32 power input here. Add a correctly regulated power path before battery operation.</text>
+</svg>

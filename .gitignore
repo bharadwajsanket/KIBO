@@ -7,6 +7,8 @@ build/
 *.eep
 *.lss
 *.sym
+*.o
+*.d
 
 # Local IDE and editor files
 .vscode/
@@ -18,3 +20,9 @@ build/
 # Local backups and temporary files
 *.bak
 *~
+
+# Local secrets: keep credentials and API keys out of GitHub
+.env
+.env.*
+secrets.h
+arduino_secrets.h

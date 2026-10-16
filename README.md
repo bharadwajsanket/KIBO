@@ -59,6 +59,6 @@ On the face, single tap moves to the next page, double tap gets a reaction, and 
 
 ## License & credits
 
-The QR encoder in `qrcode.c` and `qrcode.h` carries its own MIT license and Richard Moore’s copyright notice. Keep that notice with the files. Its header also credits Nayuki as inspiration.
+This project is licensed under the [MIT License](file:///Users/sanketbharadwaj/Developer/Kibo/LICENSE) — see the [LICENSE](file:///Users/sanketbharadwaj/Developer/Kibo/LICENSE) file for details.
 
-There is no project-wide license for Kibo’s firmware or STL yet, so those files remain all rights reserved until Sanket chooses a license. A public GitHub page by itself does not grant reuse permission. See [GitHub’s licensing guide](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/licensing-a-repository).
+The QR encoder in `qrcode.c` and `qrcode.h` carries its own MIT license and Richard Moore’s copyright notice. Its header also credits Nayuki as inspiration.

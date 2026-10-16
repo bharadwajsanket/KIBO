@@ -1,64 +1,169 @@
 # Kibo ✨
 
-*A little digital creature with a memory, a rhythm, and a personality of her own.*
+*A tiny desktop companion with expressive OLED eyes, capacitive touch interaction, and a persistent mood engine running entirely on an ESP32-C3.*
 
-Kibo is Sanket’s tiny desk buddy: expressive eyes on a 128×64 OLED, a curious touch sensor, and a whole lot of character living inside an ESP32-C3. She blinks, gets sleepy, reacts to your taps, and remembers a few things between reboots. No menu maze. Just Kibo, checking in from her little window.
+---
 
-> Small screen. Big feelings. One very opinionated GPIO pin.
+## Overview
 
-## What she gets up to
+**Kibo** is an open-source, interactive desktop companion. Built around a compact 128×64 monochrome OLED display, a capacitive touch sensor, and an ESP32-C3 Super Mini microcontroller, Kibo blends expressive facial animations with practical desk companion utilities:
 
-- Wanders through a collection of animated moods and little idle gestures.
-- Reacts to taps, quick tap bursts, and a good long pet.
-- Dozes when left alone, then wakes up when you check in.
-- Remembers bits of her personality across restarts.
-- Drops the occasional tiny pixel-art surprise and shifts her idle moods with her energy and temperament.
-- Keeps a tiny arcade tucked into her page carousel.
-- Hosts a tiny Wi-Fi setup page and draws its QR code right on the OLED.
-- Shows the time, current weather, and a short forecast when connected.
+- **Expressive Eye Physics:** Spring-mass-damper physics engine simulating saccades, dynamic pupil dilation, blinking, breathing cycles, and emotion states.
+- **Dynamic Mood & Personality Engine:** Tracks energy, curiosity, contentment, and irritability. Remembers familiarity, total touches, and mood history across restarts using non-volatile storage (`Preferences`).
+- **Interactive Touch Gestures:** Single tap, multi-tap bursts, long presses, and continuous "petting" detection with squish reactions and floating particles.
+- **Carousel of Desk Utilities:**
+  - **Face Page:** Kibo's animated resting face with micro-gestures (yawns, winks, looks around, stretches).
+  - **Local Clock & World Clock:** NTP-synchronized digital or analog clock with support for configurable secondary timezones.
+  - **Live Weather & Multi-Day Forecast:** Real-time temperature, condition icons (sun, clouds, rain, snow, storm), humidity, and forecasts via OpenWeatherMap. Supports multiple saved cities.
+  - **Tiny Arcade:** Built-in mini-games played directly via the touch sensor — *Flappy Kibo* and *Blink Reflex*.
+- **Onboard Captive Portal & Web UI:** On first boot (or when Wi-Fi is unavailable), Kibo launches an Access Point (`Kibo-Setup`) and renders a QR code on the OLED. Connect via any phone or browser to configure Wi-Fi, timezones, weather cities, API keys, and birthdays.
+- **3D Printable Enclosure:** Includes a custom STL model ready for 3D printing.
 
-## The bits and wires
+---
 
-| Part | Connection |
-| --- | --- |
-| ESP32-C3 Super Mini (HW-466AB) | Kibo’s tiny brain |
-| SSD1306 OLED, 128×64, I²C address `0x3C` | SDA → GPIO 0, SCL → GPIO 1. Firmware also tries SDA 8 / SCL 9 if needed. |
-| TTP223 capacitive touch module | Signal → GPIO 4; active high |
+## Hardware Architecture
 
-The firmware’s GPIO definitions are left as-is. Board variants can label pins differently, so check your exact board before wiring. Use power levels supported by your OLED and touch breakouts, and keep ESP32-C3 logic levels in mind.
+### Bill of Materials
 
-## Bring Kibo to life
+| Component | Specification | Notes |
+| :--- | :--- | :--- |
+| **Microcontroller** | ESP32-C3 Super Mini (HW-466AB) | RISC-V core with 2.4 GHz Wi-Fi & BLE |
+| **Display** | 0.96" SSD1306 I²C OLED (128×64) | Monochrome blue or white, I²C address `0x3C` |
+| **Input Sensor** | TTP223 Capacitive Touch Switch | Set to active HIGH / momentary mode |
+| **Power** | 5V via USB-C | Powered directly through ESP32-C3 USB port |
+| **Case** | Custom 3D-printed enclosure | [Kibo.stl](file:///Users/sanketbharadwaj/Developer/Kibo/Kibo.stl) |
 
-1. Install the Arduino IDE and the ESP32 Arduino core. Pick a board profile compatible with the ESP32-C3 Super Mini.
-2. Install **Adafruit GFX Library**, **Adafruit SSD1306**, and **Arduino_JSON**. The ESP32 core provides `WiFi`, `WebServer`, `Preferences`, `HTTPClient`, and `Wire`.
-3. Keep `Kibo.ino`, `qrcode.c`, and `qrcode.h` together in a sketch folder named `Kibo`. Open `Kibo.ino`, choose the board and port, then build and upload.
-4. On first setup, join the **Kibo-Setup** Wi-Fi network (default password: `12345678`) and visit [http://192.168.4.1/](http://192.168.4.1/). Add your Wi-Fi details there. Weather is optional and needs an OpenWeather API key.
-5. Change the setup access-point password before sharing the device. Kibo stores Wi-Fi credentials and settings in ESP32 preferences.
-
-### Weather in more than one place
-
-Add up to four cities in Kibo’s setup page. Use a semicolon and a two-letter country code for each city, like this:
+### Wiring Diagram
 
 ```text
-London|GB; Tokyo|JP; New York|US
+       ESP32-C3 Super Mini
+      ┌───────────────────┐
+      │                   │
+      │        3V3 ───────┼───────► VCC  (OLED & TTP223)
+      │        GND ───────┼───────► GND  (OLED & TTP223)
+      │                   │
+      │     GPIO 0 (SDA) ─┼───────► SDA  (SSD1306 OLED)
+      │     GPIO 1 (SCL) ─┼───────► SCL  (SSD1306 OLED)
+      │                   │
+      │     GPIO 4 ───────┼───────► I/O  (TTP223 Touch Out)
+      │                   │
+      └───────────────────┘
 ```
 
-You can also enter comma-separated city names and use one shared country code in the country field. On either weather screen, press and hold the touch sensor to move to the next saved city.
+> **Note:** The firmware also falls back to check alternate I²C pins (GPIO 8 as SDA, GPIO 9 as SCL) if your board variant differs. Always confirm the pin labeling on your specific ESP32-C3 breakout.
 
-### Tiny arcade
+---
 
-Tap through the pages after the forecast to find Kibo’s arcade. A single tap starts the highlighted game; double tap switches between **Flappy Kibo** and **Blink Reflex**. While playing, a single tap is the control: flap through the pipes, or tap as soon as Blink Reflex says **GO!** Long press to leave a game; Kibo reacts to your run when you return. The games use the touch sensor already on the build—no extra buttons needed.
+## Touch Controls & Gestures
 
-On the face, single tap moves to the next page, double tap gets a reaction, and triple tap sends Kibo to sleep. A long press on the time page opens the world clock. Page changes get a quick little wipe, and Kibo’s idle face can stretch, yawn, glance around, wink, laugh, side-eye, and more.
+| Gesture | Where | Action |
+| :--- | :--- | :--- |
+| **Single Tap** | Face Page | Cycles to the next page (Clock → Weather → Forecast → Arcade → Face) |
+| **Double Tap** | Face Page | Triggers an interactive reaction / emote |
+| **Triple Tap** | Face Page | Puts Kibo to sleep / wake up |
+| **Long Press / Hold (>600ms)** | Face Page | "Petting" mode — eyes squish happily, spawns heart particles |
+| **Rapid Tapping (Burst)** | Face Page | Overstimulates Kibo — triggers dizzy or annoyed state |
+| **Long Press (>800ms)** | Clock Page | Toggles between Local Clock and World Clock |
+| **Long Press (>800ms)** | Weather / Forecast | Cycles through configured multi-city weather list |
+| **Single Tap** | Arcade Menu | Starts selected mini-game / jumps or taps during gameplay |
+| **Double Tap** | Arcade Menu | Toggles between *Flappy Kibo* and *Blink Reflex* |
+| **Long Press (>1200ms)** | In-Game | Exits game back to Arcade menu with a reaction |
 
-## In the folder
+---
 
-- `Kibo.ino` — the firmware, setup portal, animations, and Kibo’s behavior.
-- `qrcode.c` and `qrcode.h` — the QR encoder used by the setup screen.
-- `Kibo.stl` — the printable model, ready for your slicer of choice.
+## Software & Firmware Setup
 
-## License & credits
+### Prerequisites
 
-This project is licensed under the [MIT License](file:///Users/sanketbharadwaj/Developer/Kibo/LICENSE) — see the [LICENSE](file:///Users/sanketbharadwaj/Developer/Kibo/LICENSE) file for details.
+1. Install [Arduino IDE](https://www.arduino.cc/en/software) (2.x recommended) or [PlatformIO](https://platformio.org/).
+2. Add ESP32 board support in Arduino IDE:
+   - Navigate to **Preferences** → **Additional Boards Manager URLs**:
+     ```text
+     https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+     ```
+   - Open **Boards Manager** and install **esp32** by Espressif Systems.
+3. Install required libraries via the Arduino Library Manager:
+   - `Adafruit GFX Library`
+   - `Adafruit SSD1306`
+   - `Arduino_JSON`
 
-The QR encoder in `qrcode.c` and `qrcode.h` carries its own MIT license and Richard Moore’s copyright notice. Its header also credits Nayuki as inspiration.
+### Flashing the Firmware
+
+1. Clone or download this repository:
+   ```bash
+   git clone https://github.com/bharadwajsanket/KIBO.git
+   ```
+2. Ensure the following files remain in the same folder named `Kibo`:
+   - [Kibo.ino](file:///Users/sanketbharadwaj/Developer/Kibo/Kibo.ino)
+   - [qrcode.c](file:///Users/sanketbharadwaj/Developer/Kibo/qrcode.c)
+   - [qrcode.h](file:///Users/sanketbharadwaj/Developer/Kibo/qrcode.h)
+3. Open `Kibo.ino` in Arduino IDE.
+4. Select board: **ESP32C3 Dev Module** (or your specific ESP32-C3 Super Mini profile).
+5. Set flash settings (typical defaults):
+   - **Flash Mode**: DIO / QIO
+   - **Flash Size**: 4MB
+   - **USB CDC On Boot**: Enabled (if using hardware USB-CDC)
+6. Connect your ESP32-C3 via USB, select the correct COM/Serial port, and click **Upload**.
+
+---
+
+## Initial Configuration & Web Portal
+
+1. On first power-on (or whenever configured Wi-Fi is unreachable), Kibo starts an access point:
+   - **SSID:** `Kibo-Setup`
+   - **Default Password:** `12345678`
+2. Kibo will display a scannable **QR code** on her OLED screen for quick phone connection.
+3. Once connected to `Kibo-Setup`, open your browser and navigate to:
+   ```text
+   http://192.168.4.1
+   ```
+4. Configure your preferences:
+   - **Wi-Fi Settings:** Network SSID and Password.
+   - **Timezone:** POSIX timezone string (e.g. `UTC0`, `EST5EDT`, `IST-5:30`) and optional World Clock offset.
+   - **Weather (Optional):** Enter your free [OpenWeatherMap](https://openweathermap.org/api) API key and city/country codes (format: `London|GB; Tokyo|JP; New York|US`).
+   - **Birthdays & Dates:** Store special dates for custom celebration animations.
+   - **Security:** Update the AP setup password.
+5. Save and restart Kibo. Kibo connects to your home network, syncs time via NTP, and pulls weather updates in the background.
+
+---
+
+## Repository Structure
+
+```text
+Kibo/
+├── Kibo.ino          # Complete firmware: state machine, graphics engine, web portal
+├── qrcode.c          # Lightweight QR code generator engine
+├── qrcode.h          # Header definitions for QR code generation
+├── Kibo.stl          # 3D printable desktop enclosure
+├── README.md         # Documentation & setup guide
+└── LICENSE           # MIT License
+```
+
+---
+
+## 3D Printing the Case
+
+- File: [Kibo.stl](file:///Users/sanketbharadwaj/Developer/Kibo/Kibo.stl)
+- Recommended print settings:
+  - **Material:** PLA or PETG
+  - **Layer Height:** 0.16mm – 0.20mm
+  - **Infill:** 15% – 20%
+  - **Supports:** As needed depending on print orientation
+
+---
+
+## Contributing
+
+Contributions, bug reports, and ideas are welcome! Feel free to:
+1. Fork the repository.
+2. Create your feature branch (`git checkout -b feature/cool-animation`).
+3. Commit your changes (`git commit -m 'Add new micro-gesture'`).
+4. Push to the branch (`git push origin feature/cool-animation`).
+5. Open a Pull Request.
+
+---
+
+## License & Credits
+
+- **Project:** Licensed under the [MIT License](file:///Users/sanketbharadwaj/Developer/Kibo/LICENSE) — Copyright (c) 2025 Sanket Bharadwaj.
+- **QR Code Engine:** `qrcode.c` / `qrcode.h` are copyright (c) Richard Moore and licensed under the MIT License (inspired by Nayuki's QR code generator).

@@ -290,6 +290,7 @@ MiniGame selectedGame = GAME_FLAPPY;
 GamePhase gamePhase = GAME_MENU;
 bool gameRunning = false;
 bool gameTouchPressedBeforeGo = false;
+uint8_t reflexLightsOn = 0;
 unsigned long gameLastFrameAt = 0, gamePhaseAt = 0, gameStartedAt = 0;
 float gameBirdY = 28.0f, gameBirdVelocity = 0.0f, gamePipeX = 112.0f;
 int gamePipeGapY = 30, gameScore = 0, gameBestFlappyScore = 0;
@@ -323,6 +324,8 @@ bool isLongPressHandled = false;
 int rapidTapWindowCount = 0;
 unsigned long rapidTapWindowStart = 0;
 int rapidTapBurstOriginPage = -1;
+bool pendingThreeTapSleep = false;
+uint32_t awaySecondsAtLastTouch = 0;
 
 FaceGesture currentGesture = FG_NONE;
 unsigned long gestureStartedAt = 0, gestureDurationMs = 0, nextGestureRoll = 0;
@@ -1265,7 +1268,6 @@ void updateGestureBank() {
 }
 
 static uint8_t teaseStreak = 0;
-static unsigned long lastTeaseTime = 0;
 static bool teaseFaintRecoveryPending = false;
 static BehaviorState lastIdleMood = BEHAVIOR_AWAKE;
 
@@ -1304,16 +1306,32 @@ void triggerTeaseReaction() {
   // Let one dizzy/faint sequence finish; repeated taps cannot restart it.
   if (behaviorState == BEHAVIOR_DIZZY || isDozedNow) return;
   unsigned long now = millis();
-  lastTeaseTime = now;
   teaseStreak = 5;
 
-  personality.irritability = (uint8_t)min(100, (int)personality.irritability + 7);
-  personality.energy = (personality.energy > 3) ? personality.energy - 3 : 0;
+  personality.irritability = (uint8_t)min(100, (int)personality.irritability + 12);
+  personality.energy = (personality.energy > 5) ? personality.energy - 5 : 0;
   personalityDirty = true;
   lastFaceActiveAt = now;
   lastInteractionMillis = now;
   setBehavior(BEHAVIOR_DIZZY, 3500, true);
   DBG("[TEASE] rapid burst -> dizzy faint\n");
+}
+
+static void enterTripleTapSleep(unsigned long now) {
+  pendingThreeTapSleep = false;
+  if (isSleepingNow || isDozedNow || scheduledSleepActive) return;
+  savePersonality(true);
+  isSleepingNow = true;
+  isDozedNow = false;
+  teaseFaintRecoveryPending = false;
+  scheduledSleepActive = false;
+  sleepEnteredAt = now;
+  returnToFacePage();
+  tapCounter = 0;
+  rapidTapWindowCount = 0;
+  rapidTapBurstOriginPage = -1;
+  setBehavior(BEHAVIOR_SLEEPING, 0, true);
+  DBG("[TOUCH] delayed 3tap sleep\n");
 }
 
 // 14. TOUCH INPUT  (REWRITTEN: rising edge = tap, duration decides tap vs hold)
@@ -1328,6 +1346,14 @@ void handleTouchInput() {
   if (now - bootMillis < BOOT_TOUCH_BLACKOUT_MS) return;
   if (isSleepingNow && behaviorState == BEHAVIOR_SLEEPING &&
       (now - sleepEnteredAt < SLEEP_ENTRY_GUARD_MS)) return;
+
+  // Wait out the burst window before treating three taps as sleep, so tap four
+  // still gets a chance to complete the tease/faint sequence.
+  if (pendingThreeTapSleep && rapidTapBurstOriginPage == 0 && rapidTapWindowCount == 3 &&
+      (now - rapidTapWindowStart > RAPID_TAP_WINDOW_MS)) {
+    enterTripleTapSleep(now);
+    return;
+  }
 
   // Debounced rising edge
   if (raw != lastStable) {
@@ -1345,7 +1371,11 @@ void handleTouchInput() {
         lastInteractionMillis = now;
         if (currentPage == 0) lastFaceActiveAt = now;
         time_t touchEpoch = time(nullptr);
+        awaySecondsAtLastTouch = 0;
         if (touchEpoch > 1600000000) {
+          uint32_t currentEpoch = (uint32_t)touchEpoch;
+          if (personality.lastTouchEpoch > 0 && currentEpoch >= personality.lastTouchEpoch)
+            awaySecondsAtLastTouch = currentEpoch - personality.lastTouchEpoch;
           personality.lastTouchEpoch = (uint32_t)touchEpoch;
           personality.lastSadStreakEpoch = 0;
           personalityDirty = true;
@@ -1391,7 +1421,7 @@ void handleTouchInput() {
 
         if (isBeingPetted) {
           isBeingPetted = false;
-          unsigned long petDuration = now - petStartTime;
+          uint8_t irritationBeforePet = personality.irritability;
           personality.petCount++;
           personality.contentment = (uint8_t)min(100, (int)personality.contentment + 25);
           if (personality.irritability > 15) personality.irritability -= 15;
@@ -1406,24 +1436,31 @@ void handleTouchInput() {
             DBG("[DOZE] woke up after petting\n");
           } else if (!isDozedNow && !petWokeFromDoze) {
             triggerSparklesBurst(64.0f, 24.0f);
-            int r = random(0, 4);
-            if (r == 0) {
-              setBehavior(BEHAVIOR_PLAYFUL, 3500, true);
-              DBG("[PET] release -> happy playful dance\n");
-            } else if (r == 1) {
-              setBehavior(BEHAVIOR_OVER_EXCITED, 3500, true);
-              DBG("[PET] release -> dancing over-excited\n");
-            } else if (r == 2) {
-              setBehavior(BEHAVIOR_CELEBRATING, 3200, true);
-              DBG("[PET] release -> celebration dance\n");
+            if (personality.petCount % 10 == 0) {
+              setBehavior(BEHAVIOR_CELEBRATING, 3000, true);
+              DBG("[PET] tenth-pet milestone\n");
+            } else if (irritationBeforePet >= 60) {
+              setBehavior(BEHAVIOR_RECOVERING, 1800, true);
+              DBG("[PET] soothed after irritation\n");
+            } else if (personality.familiarity < 12) {
+              setBehavior(BEHAVIOR_SHY, 2200, true);
+              DBG("[PET] shy with a new friend\n");
+            } else if (personality.familiarity >= 30 && personality.contentment >= 80) {
+              setBehavior(BEHAVIOR_OVER_EXCITED, 3000, true);
+              DBG("[PET] familiar joyful reaction\n");
+            } else if (personality.contentment >= 55) {
+              setBehavior(BEHAVIOR_HAPPY, 2600, true);
             } else {
-              setBehavior(BEHAVIOR_HAPPY, 3000, true);
-              DBG("[PET] release -> joyful happy\n");
+              setBehavior(BEHAVIOR_CONTENT, 2200, true);
             }
           }
           petWokeFromDoze = false;
         } else if (!isLongPressHandled) {
-          if (isDozedNow) {
+          if (behaviorState == BEHAVIOR_DIZZY) {
+            DBG("[TEASE] tap ignored during faint animation\n");
+          } else if (isDozedNow && teaseFaintRecoveryPending) {
+            DBG("[TEASE] tap ignored during faint recovery; pet to wake sooner\n");
+          } else if (isDozedNow) {
             isDozedNow = false;
             teaseFaintRecoveryPending = false;
             dozeEnteredAt = 0;
@@ -1450,8 +1487,24 @@ void handleTouchInput() {
                 returnToFacePage();
                 tapCounter = 0;
               }
+              if (rapidTapBurstOriginPage == 0 && rapidTapWindowCount == 2 &&
+                  !isSleepingNow && !isDozedNow && behaviorState != BEHAVIOR_DIZZY) {
+                setBehavior(BEHAVIOR_PLAYFUL, 1400, true);
+              }
+              if (rapidTapBurstOriginPage == 0 && rapidTapWindowCount == 3 &&
+                  !isSleepingNow && !isDozedNow && behaviorState != BEHAVIOR_DIZZY) {
+                pendingThreeTapSleep = true;
+                tapCounter = 0;
+                if (currentPage != 0) returnToFacePage();
+                teaseStreak = 3;
+                personality.irritability = (uint8_t)min(100, (int)personality.irritability + 8);
+                personalityDirty = true;
+                setBehavior(BEHAVIOR_FED_UP, 1500, true);
+                DBG("[TEASE] 3-tap burst -> fed up; waiting for tap four\n");
+              }
               if (rapidTapBurstOriginPage == 0 && rapidTapWindowCount >= RAPID_TAP_BURST_THRESHOLD &&
                   !isSleepingNow && currentPage != 5) {
+                pendingThreeTapSleep = false;
                 rapidTapWindowCount = 0; rapidTapBurstOriginPage = -1; tapCounter = 0;
                 if (currentPage != 0) returnToFacePage();
                 triggerTeaseReaction();
@@ -1484,6 +1537,8 @@ void handleTouchInput() {
       lastHeartSpawn = now;
       tapCounter = 0;
       rapidTapWindowCount = 0;
+      rapidTapBurstOriginPage = -1;
+      pendingThreeTapSleep = false;
       if (!isDozedNow) setBehavior(BEHAVIOR_CONTENT, 0, true);
       spawnHeartsBurst();
       DBG("[TOUCH] petting start\n");
@@ -1555,8 +1610,8 @@ void handleTouchInput() {
           } else {
             setBehavior(BEHAVIOR_CONTENT, 2400, true);
           }
-          returnToFacePage();
-          DBG("[GAME] exit with a little reaction\n");
+          currentPage = 5;
+          DBG("[GAME] exit to arcade menu\n");
         } else {
           returnToFacePage();
           DBG("[GAME] leave game shelf\n");
@@ -1579,12 +1634,22 @@ void handleTouchInput() {
 
     if (taps == 1) {
       if (currentPage == 0) {
-        doubleTapInteractive = true;
-        triggerSparklesBurst(64.0f, 24.0f);
-        setBehavior(BEHAVIOR_SURPRISED, 700, true);
-        DBG("[TOUCH] single tap play interaction\n");
+        if (awaySecondsAtLastTouch >= 300) {
+          doubleTapInteractive = false;
+          if (awaySecondsAtLastTouch >= 3600) playReactionBasedOnContext(3600001UL);
+          else playReactionBasedOnContext(300001UL);
+          DBG("[MEMORY] welcome back after %lu sec\n", (unsigned long)awaySecondsAtLastTouch);
+        } else {
+          doubleTapInteractive = true;
+          triggerSparklesBurst(64.0f, 24.0f);
+          setBehavior(BEHAVIOR_SURPRISED, 700, true);
+          DBG("[TOUCH] single tap play interaction\n");
+        }
       }
-      else if (currentPage == 1) currentPage = 2;
+      else if (currentPage == 1) {
+        analogClock = !analogClock;
+        DBG("[TOUCH] time display analog=%d\n", analogClock);
+      }
       else if (currentPage == 2) {
         useFahrenheit = !useFahrenheit;
         DBG("[TOUCH] weather units F=%d\n", useFahrenheit);
@@ -1600,7 +1665,7 @@ void handleTouchInput() {
         currentPage = 1;
         DBG("[TOUCH] double tap -> time page\n");
       }
-      else if (currentPage == 1) { analogClock = !analogClock; DBG("[TOUCH] 2tap analog=%d\n", analogClock); }
+      else if (currentPage == 1) { currentPage = 2; DBG("[TOUCH] time -> weather\n"); }
       else if (currentPage == 2) { currentPage = 3; DBG("[TOUCH] weather -> forecast\n"); }
       else if (currentPage == 3) { currentPage = 5; DBG("[TOUCH] forecast -> arcade\n"); }
       else if (currentPage == 5 && !gameRunning) {
@@ -1608,18 +1673,7 @@ void handleTouchInput() {
         DBG("[GAME] selected %u\n", (uint8_t)selectedGame);
       }
     } else if (taps == 3 && rapidTapWindowCount < 4) {
-      if (currentPage == 0) {
-        savePersonality(true);
-        isSleepingNow = true;
-        isDozedNow = false;
-        scheduledSleepActive = false;
-        sleepEnteredAt = now;
-        returnToFacePage();
-        tapCounter = 0;
-        rapidTapWindowCount = 0;
-        setBehavior(BEHAVIOR_SLEEPING, 0, true);
-        DBG("[TOUCH] 3tap sleep\n");
-      } else {
+      if (currentPage != 0) {
         if (currentPage == 5) { gameRunning = false; gamePhase = GAME_MENU; }
         returnToFacePage(); DBG("[TOUCH] 3tap -> face\n");
       }
@@ -2434,7 +2488,8 @@ void startSelectedGame() {
     gamePipeScored = false;
   } else {
     gamePhase = GAME_READY;
-    gamePhaseAt = now + random(1800UL, 6000UL);
+    reflexLightsOn = 0;
+    gamePhaseAt = now + random(500UL, 1300UL);
   }
 }
 
@@ -2465,7 +2520,8 @@ void handleGameTap() {
   if (gamePhase == GAME_RESULT) {
     gameReactionMs = 0;
     gamePhase = GAME_READY;
-    gamePhaseAt = now + random(1800UL, 6000UL);
+    reflexLightsOn = 0;
+    gamePhaseAt = now + random(500UL, 1300UL);
     return;
   }
   if (gamePhase == GAME_READY) {
@@ -2486,8 +2542,17 @@ void updateMiniGame() {
   unsigned long now = millis();
   if (selectedGame == GAME_BLINK_REFLEX) {
     if (gamePhase == GAME_READY && now >= gamePhaseAt) {
-      gamePhase = GAME_PLAYING;
-      gameStartedAt = now;
+      if (reflexLightsOn < 3) {
+        reflexLightsOn++;
+        // Each lamp gets its own slightly jittered interval. After lamp three,
+        // hold a random F1-style pause before the lights go out and GO appears.
+        gamePhaseAt = now + (reflexLightsOn < 3
+          ? random(350UL, 900UL)
+          : random(550UL, 1700UL));
+      } else {
+        gamePhase = GAME_PLAYING;
+        gameStartedAt = now;
+      }
     }
     return;
   }
@@ -2525,32 +2590,37 @@ void drawMiniGamePage() {
   if (!gameRunning) {
     display.fillRect(0, 0, 128, 12, SSD1306_WHITE);
     display.setTextColor(SSD1306_BLACK);
-    display.setCursor(4, 2); display.print("KIBO ARCADE");
-    display.setCursor(108, 2); display.print(selectedGame == GAME_FLAPPY ? "1/2" : "2/2");
+    display.setCursor(4, 2); display.print("ARCADE");
+    display.setCursor(82, 2); display.print(selectedGame == GAME_FLAPPY ? "01 / 02" : "02 / 02");
     display.setTextColor(SSD1306_WHITE);
-    display.setCursor(selectedGame == GAME_FLAPPY ? 34 : 29, 17);
-    display.print(selectedGame == GAME_FLAPPY ? "FLAPPY KIBO" : "BLINK REFLEX");
-    display.drawLine(14, 27, 114, 27, SSD1306_WHITE);
+    display.drawRoundRect(4, 14, 120, 29, 5, SSD1306_WHITE);
+    display.drawLine(44, 18, 44, 39, SSD1306_WHITE);
     if (selectedGame == GAME_FLAPPY) {
-      display.drawLine(20, 45, 108, 45, SSD1306_WHITE);
-      display.drawRoundRect(47, 33, 16, 10, 4, SSD1306_WHITE);
-      display.fillCircle(59, 36, 1, SSD1306_BLACK);
-      display.drawLine(47, 39, 42, 37, SSD1306_WHITE);
-      display.fillRect(84, 29, 8, 7, SSD1306_WHITE);
-      display.fillRect(82, 36, 12, 3, SSD1306_WHITE);
-      display.fillRect(84, 42, 8, 3, SSD1306_WHITE);
-      display.fillRect(82, 39, 12, 3, SSD1306_WHITE);
+      display.drawLine(10, 36, 37, 36, SSD1306_WHITE);
+      display.drawRoundRect(16, 24, 16, 10, 4, SSD1306_WHITE);
+      display.fillCircle(27, 27, 1, SSD1306_WHITE);
+      display.drawLine(16, 29, 12, 27, SSD1306_WHITE);
+      display.drawLine(22, 31, 19, 34, SSD1306_WHITE);
+      display.fillRect(35, 18, 4, 8, SSD1306_WHITE);
+      display.fillRect(33, 26, 6, 3, SSD1306_WHITE);
+      display.fillRect(35, 33, 4, 7, SSD1306_WHITE);
+      display.fillRect(33, 31, 6, 3, SSD1306_WHITE);
+      display.setCursor(51, 20); display.print("FLAPPY KIBO");
+      display.setCursor(51, 32); display.print("Tap to flap");
     } else {
-      display.drawRoundRect(24, 32, 34, 14, 6, SSD1306_WHITE);
-      display.drawRoundRect(70, 32, 34, 14, 6, SSD1306_WHITE);
-      display.fillCircle(41, 39, 4, SSD1306_WHITE);
-      display.fillCircle(87, 39, 4, SSD1306_WHITE);
-      display.drawPixel(42, 38, SSD1306_BLACK);
-      display.drawPixel(88, 38, SSD1306_BLACK);
+      display.drawRoundRect(10, 19, 28, 18, 5, SSD1306_WHITE);
+      display.drawCircle(16, 28, 3, SSD1306_WHITE);
+      display.drawCircle(24, 28, 3, SSD1306_WHITE);
+      display.drawCircle(32, 28, 3, SSD1306_WHITE);
+      display.fillCircle(16, 28, 1, SSD1306_WHITE);
+      display.fillCircle(24, 28, 1, SSD1306_WHITE);
+      display.fillCircle(32, 28, 1, SSD1306_WHITE);
+      display.setCursor(51, 20); display.print("BLINK REFLEX");
+      display.setCursor(51, 32); display.print("Tap on green");
     }
-    display.drawLine(0, 51, 128, 51, SSD1306_WHITE);
-    display.setCursor(5, 55); display.print("Tap PLAY");
-    display.setCursor(75, 55); display.print("2x NEXT");
+    display.drawLine(4, 45, 124, 45, SSD1306_WHITE);
+    display.setCursor(5, 47); display.print("TAP PLAY | 2X NEXT");
+    display.setCursor(5, 55); display.print("HOLD: BACK");
     return;
   }
 
@@ -2599,7 +2669,8 @@ void drawMiniGamePage() {
     const int lampX[] = { 42, 64, 86 };
     for (int i = 0; i < 3; i++) {
       display.drawRoundRect(lampX[i] - 7, 22, 14, 17, 5, SSD1306_WHITE);
-      if (gamePhase == GAME_PLAYING) display.fillCircle(lampX[i], 30, 4, SSD1306_WHITE);
+      if (gamePhase == GAME_READY && i < reflexLightsOn)
+        display.fillCircle(lampX[i], 30, 4, SSD1306_WHITE);
     }
     if (gamePhase == GAME_READY) {
       display.setCursor(49, 47); display.print("WAIT...");
@@ -3306,16 +3377,28 @@ void playReactionBasedOnContext(unsigned long offDuration) {
   bool morning = (hour >= 6 && hour < 12);
   bool evening = (hour >= 17 && hour < 21);
   bool night = (hour >= 21 || hour < 6);
-  bool hot = (temperature > 30.0f), cold = (temperature < 10.0f);
+  BehaviorState welcome = BEHAVIOR_SURPRISED;
+  unsigned long duration = 1000;
   if (offDuration > 3600000UL) {
-    if (morning) setBehavior(BEHAVIOR_CURIOUS, 3000);
-    else if (night) setBehavior(BEHAVIOR_GROGGY, GROGGY_DURATION_MS, true);
-    else setBehavior(BEHAVIOR_HAPPY, 3000);
-  } else if (offDuration > 300000UL) setBehavior(BEHAVIOR_CURIOUS, 2500);
-  else setBehavior(BEHAVIOR_SURPRISED, 900);
-  if (hot) setBehavior(BEHAVIOR_SLEEPY, 3000);
-  if (cold) setBehavior(BEHAVIOR_SURPRISED, 700);
-  if (evening) setBehavior(BEHAVIOR_CONTENT, 2000);
+    if (personality.familiarity < 12) welcome = BEHAVIOR_SHY;
+    else if (night) welcome = BEHAVIOR_GROGGY;
+    else if (morning) welcome = BEHAVIOR_CURIOUS;
+    else welcome = BEHAVIOR_HAPPY;
+    duration = GROGGY_DURATION_MS;
+    if (night && personality.energy < 35) welcome = BEHAVIOR_SLEEPY;
+  } else if (offDuration > 300000UL) {
+    if (personality.familiarity < 12) welcome = BEHAVIOR_SHY;
+    else if (personality.irritability > 55) welcome = BEHAVIOR_FED_UP;
+    else welcome = BEHAVIOR_CURIOUS;
+    duration = 2500;
+  } else {
+    duration = 900;
+  }
+  if (evening && welcome == BEHAVIOR_HAPPY) {
+    welcome = BEHAVIOR_CONTENT;
+    duration = 2000;
+  }
+  setBehavior(welcome, duration, true);
 }
 
 // 21. SETUP
